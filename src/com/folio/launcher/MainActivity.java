@@ -808,7 +808,14 @@ public class MainActivity extends Activity {
         addr.addView(codeRow);
         box.addView(addr);
 
-        TextView st = ReadingChrome.text(this, "Aguardando envio…", 13, p.sec, false);
+        TextView qrHint = ReadingChrome.text(this, "Ou aponte a câmera do celular para o código:", 12, p.sec, false);
+        qrHint.setPadding(0, px(12), 0, px(6));
+        box.addView(qrHint);
+        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(px(176), px(176));
+        qlp.gravity = Gravity.CENTER_HORIZONTAL;
+        box.addView(QrCode.view(this, transferUrl), qlp);
+
+        TextView st =ReadingChrome.text(this, "Aguardando envio…", 13, p.sec, false);
         st.setPadding(0, px(16), 0, px(8));
         transferBar = new Widgets.Bar(this);
         box.addView(st);
