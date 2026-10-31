@@ -410,6 +410,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == FolioUpdate.REQ_APK) {
+            if (res == RESULT_OK && data != null && data.getData() != null) new FolioUpdate(this).installFrom(data.getData());
+            return;
+        }
         if (req != PICK || res != RESULT_OK || data == null) return;
         final List<Uri> uris = new ArrayList<>();
         if (data.getClipData() != null) {
@@ -1439,6 +1443,7 @@ public class MainActivity extends Activity {
         setBox.removeAllViews();
         settingRow("Central de controle", "Wi-Fi, Bluetooth, brilho, volume e mais", v -> openControl());
         settingRow("Personalizar Início", "Escolha o que aparece na tela inicial", v -> customizeHome());
+        settingRow("Atualizações do Folio", "Verificar versão, instalar APK", v -> new FolioUpdate(this).show());
         settingRow("Tema", Theme.NAMES[Theme.index], v -> chooseTheme());
         settingRow("Perfil de desempenho", PROFILES[profile], v -> chooseProfile());
         settingRow("Movimento", PaperMotion.NAMES[PaperMotion.mode()], v -> chooseMotion());
