@@ -53,6 +53,7 @@ final class Book {
     private String coverEntry; // EPUB: zip entry. FB2: binary id.
     final List<String> spine = new ArrayList<>();
     private List<String> cbzNames;
+    private String navEntry, ncxEntry; // EPUB table of contents documents
 
     private Book(File f, Kind k) {
         file = f;
@@ -146,6 +147,8 @@ final class Book {
                         String props = p.getAttributeValue(null, "properties");
                         if (id != null && h != null) href.put(id, h);
                         if (props != null && props.contains("cover-image")) coverHref = h;
+                        if (h != null && props != null && java.util.Arrays.asList(props.split("\\s+")).contains("nav")) navEntry = resolve(dir, h);
+                        if (h != null && "application/x-dtbncx+xml".equals(p.getAttributeValue(null, "media-type"))) ncxEntry = resolve(dir, h);
                         break;
                     }
                     case "itemref":
@@ -160,6 +163,90 @@ final class Book {
         }
         if (coverHref == null && coverId != null) coverHref = href.get(coverId);
         if (coverHref != null) coverEntry = resolve(dir, coverHref);
+    }
+
+    /**
+     * Chapter titles from the EPUB's own table of contents (EPUB 3 nav, else NCX), one per spine entry;
+     * null where the book gives none. Read on demand, never during import.
+     */
+    String[] chapterTitles() {
+        String[] out = new String[spine.size()];
+        if (kind != Kind.EPUB) return out;
+        Map<String, String> byPath = new HashMap<>();
+        try (ZipFile z = new ZipFile(file)) {
+            if (navEntry != null && z.getEntry(navEntry) != null) readNav(z, byPath);
+            if (byPath.isEmpty() && ncxEntry != null && z.getEntry(ncxEntry) != null) readNcx(z, byPath);
+        } catch (Exception ignored) {
+        }
+        for (int i = 0; i < out.length; i++) out[i] = byPath.get(spine.get(i));
+        return out;
+    }
+
+    private static String dirOf(String path) {
+        return path.contains("/") ? path.substring(0, path.lastIndexOf('/') + 1) : "";
+    }
+
+    private static void addTitle(Map<String, String> m, String path, String title) {
+        title = title == null ? "" : title.replaceAll("\\s+", " ").trim();
+        if (!title.isEmpty() && !m.containsKey(path)) m.put(path, title);
+    }
+
+    private void readNav(ZipFile z, Map<String, String> m) throws Exception {
+        String dir = dirOf(navEntry);
+        try (InputStream in = z.getInputStream(z.getEntry(navEntry))) {
+            XmlPullParser p = Xml.newPullParser();
+            p.setInput(in, null);
+            boolean inToc = false;
+            String href = null;
+            StringBuilder text = new StringBuilder();
+            int aDepth = 0;
+            for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT; t = p.next()) {
+                if (t == XmlPullParser.START_TAG) {
+                    String n = p.getName();
+                    if (n.equals("nav")) {
+                        inToc = false;
+                        for (int i = 0; i < p.getAttributeCount(); i++) {
+                            if (p.getAttributeName(i).endsWith("type") && p.getAttributeValue(i).contains("toc")) inToc = true;
+                        }
+                    } else if (n.equals("a") && inToc) {
+                        href = p.getAttributeValue(null, "href");
+                        text.setLength(0);
+                        aDepth = 1;
+                    } else if (aDepth > 0) {
+                        aDepth++;
+                    }
+                } else if (t == XmlPullParser.TEXT && aDepth > 0) {
+                    text.append(p.getText());
+                } else if (t == XmlPullParser.END_TAG) {
+                    if (aDepth > 0 && --aDepth == 0 && href != null) addTitle(m, resolve(dir, href), text.toString());
+                    else if (p.getName().equals("nav")) inToc = false;
+                }
+            }
+        }
+    }
+
+    private void readNcx(ZipFile z, Map<String, String> m) throws Exception {
+        String dir = dirOf(ncxEntry);
+        try (InputStream in = z.getInputStream(z.getEntry(ncxEntry))) {
+            XmlPullParser p = Xml.newPullParser();
+            p.setInput(in, null);
+            String label = null;
+            boolean inLabel = false;
+            for (int t = p.getEventType(); t != XmlPullParser.END_DOCUMENT; t = p.next()) {
+                if (t != XmlPullParser.START_TAG) {
+                    if (t == XmlPullParser.END_TAG && p.getName().equals("navLabel")) inLabel = false;
+                    continue;
+                }
+                String n = p.getName();
+                if (n.equals("navLabel")) inLabel = true;
+                else if (n.equals("text") && inLabel) label = p.nextText();
+                else if (n.equals("content")) {
+                    String src = p.getAttributeValue(null, "src");
+                    if (src != null) addTitle(m, resolve(dir, src), label);
+                    label = null;
+                }
+            }
+        }
     }
 
     static String resolve(String dir, String href) {

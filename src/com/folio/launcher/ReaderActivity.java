@@ -442,11 +442,12 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
         final LinearLayout box = sheetBox();
         box.addView(ReadingChrome.text(this, "Sumário", 17, pal.text, true));
         final Dialog[] dlg = new Dialog[1];
+        String[] titles = epub.chapterTitles();
         for (int i = 0; i < epub.spine.size(); i++) {
             final int k = i;
             boolean cur = i == chapter;
-            TextView t = ReadingChrome.text(this, (epub.paged() ? "Página " : "Capítulo ") + (i + 1), 15,
-                    cur ? pal.accent : pal.text, cur);
+            String label = titles[i] != null ? titles[i] : (epub.paged() ? "Página " : "Capítulo ") + (i + 1);
+            TextView t = ReadingChrome.text(this, label, 15, cur ? pal.accent : pal.text, cur);
             t.setPadding(0, dp(12), 0, dp(12));
             t.setOnClickListener(v -> {
                 dlg[0].dismiss();
