@@ -1,0 +1,8 @@
+build/
+backup-contas/
+scratch-tmp/
+amostras/
+debug.keystore
+*.log
+hs_err_pid*
+replay_pid*
