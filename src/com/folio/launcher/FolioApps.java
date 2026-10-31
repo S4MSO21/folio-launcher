@@ -194,6 +194,24 @@ final class FolioApps {
         io.shutdownNow();
     }
 
+    /** Apps matching an already-folded query, as {label, pkg, cls}; hidden apps are skipped. */
+    List<String[]> find(String foldedQuery) {
+        if (all.isEmpty()) reload(); // first use before the Apps tab was opened
+        List<String[]> out = new ArrayList<>();
+        for (App p : all) {
+            if (!p.hidden && FolioSearch.fold(p.label).contains(foldedQuery)) out.add(new String[]{p.label, p.pkg, p.cls});
+        }
+        return out;
+    }
+
+    void launch(String pkg, String cls) {
+        App app = new App();
+        app.pkg = pkg;
+        app.cls = cls;
+        app.label = pkg;
+        open(app);
+    }
+
     // ---------- data ----------
     private void reload() {
         io.execute(() -> {

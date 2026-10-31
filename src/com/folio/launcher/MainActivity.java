@@ -215,6 +215,62 @@ public class MainActivity extends Activity {
 
     private long lastScan;
 
+    private void globalSearch() {
+        new FolioSearch(this, new FolioSearch.Host() {
+            @Override
+            public List<Book> books() {
+                return all;
+            }
+
+            @Override
+            public List<String[]> collections() {
+                return Db.get(MainActivity.this).collections();
+            }
+
+            @Override
+            public List<String[]> apps(String q) {
+                return apps.find(q);
+            }
+
+            @Override
+            public void openBook(Book b) {
+                MainActivity.this.openBook(b);
+            }
+
+            @Override
+            public void openCollection(String id) {
+                filter = "c:" + id;
+                setTab(1);
+                scan();
+            }
+
+            @Override
+            public void openAuthor(String name) {
+                filter = "all";
+                setTab(1);
+                search.setVisibility(View.VISIBLE);
+                search.setText(name);
+            }
+
+            @Override
+            public void openApp(String pkg, String cls) {
+                apps.launch(pkg, cls);
+            }
+
+            @Override
+            public void openSetting(int i) {
+                switch (i) {
+                    case 0: chooseTheme(); break;
+                    case 1: chooseProfile(); break;
+                    case 2: chooseMotion(); break;
+                    case 3: chooseGoal(); break;
+                    case 4: startTransfer(); break;
+                    default: setTab(3);
+                }
+            }
+        }).show();
+    }
+
     /** "Folio 0.2 · build 7", read from the installed package so it always matches the APK. */
     private String versionLine() {
         try {
@@ -829,17 +885,7 @@ public class MainActivity extends Activity {
         head.addView(brightnessButton("−", "Diminuir brilho", -10));
         head.addView(brightnessButton("+", "Aumentar brilho", 10));
         ImageView searchBtn = iconButton("ic_search", 44, "Pesquisar");
-        searchBtn.setOnClickListener(v -> {
-            setTab(1);
-            boolean show = search.getVisibility() != View.VISIBLE;
-            search.setVisibility(show ? View.VISIBLE : View.GONE);
-            if (show) {
-                search.requestFocus();
-                ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(search, 0);
-            } else {
-                search.setText("");
-            }
-        });
+        searchBtn.setOnClickListener(v -> globalSearch());
         head.addView(searchBtn);
         head.addView(new View(this), new LinearLayout.LayoutParams(px(8), 1));
         importBtn = text("Importar", 15, Theme.bg, true);
