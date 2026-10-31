@@ -34,6 +34,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -294,9 +295,8 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    private void stepBrightness(int delta) {
-        android.content.SharedPreferences sp = getSharedPreferences("folio", MODE_PRIVATE);
-        int cur = sp.getInt("bright", 0);
+    private int currentBrightness() {
+        int cur = getSharedPreferences("folio", MODE_PRIVATE).getInt("bright", 0);
         if (cur == 0) {
             try {
                 cur = Math.round(android.provider.Settings.System.getInt(getContentResolver(),
@@ -305,8 +305,37 @@ public class MainActivity extends Activity {
                 cur = 50;
             }
         }
-        int now = Math.max(10, Math.min(100, cur + delta));
-        sp.edit().putInt("bright", now).apply();
+        return Math.max(10, Math.min(100, cur));
+    }
+
+    private void openControl() {
+        new FolioControl(this, new FolioControl.Host() {
+            @Override
+            public int brightness() {
+                return currentBrightness();
+            }
+
+            @Override
+            public void setBrightness(int percent) {
+                getSharedPreferences("folio", MODE_PRIVATE).edit().putInt("bright", percent).apply();
+                applyBrightness();
+            }
+
+            @Override
+            public boolean transferRunning() {
+                return server != null;
+            }
+
+            @Override
+            public void openTransfer() {
+                startTransfer();
+            }
+        }).show();
+    }
+
+    private void stepBrightness(int delta) {
+        int now = Math.max(10, Math.min(100, currentBrightness() + delta));
+        getSharedPreferences("folio", MODE_PRIVATE).edit().putInt("bright", now).apply();
         applyBrightness();
         android.widget.Toast.makeText(this, "Brilho " + now + "%", android.widget.Toast.LENGTH_SHORT).show();
     }
@@ -1107,8 +1136,81 @@ public class MainActivity extends Activity {
         return box;
     }
 
+    private boolean homePref(String key) {
+        return getSharedPreferences("folio", MODE_PRIVATE).getBoolean("home_" + key, true);
+    }
+
+    private void homeHeader() {
+        if (homePref("clock")) {
+            LinearLayout c = card();
+            android.widget.TextClock clock = new android.widget.TextClock(this);
+            clock.setFormat24Hour("HH:mm");
+            clock.setFormat12Hour("HH:mm");
+            clock.setTextSize(TypedValue.COMPLEX_UNIT_SP, 44);
+            clock.setTypeface(Typeface.SERIF, Typeface.BOLD);
+            clock.setTextColor(Theme.text);
+            c.addView(clock);
+            String ds = new java.text.SimpleDateFormat("EEEE, d 'de' MMMM", new Locale("pt", "BR")).format(new java.util.Date());
+            TextView date = text(Character.toUpperCase(ds.charAt(0)) + ds.substring(1), 14, Theme.secondary, false);
+            c.addView(date);
+            homeBox.addView(c, stack(8));
+        }
+        if (homePref("shortcuts")) {
+            HorizontalScrollView hs = new HorizontalScrollView(this);
+            hs.setHorizontalScrollBarEnabled(false);
+            LinearLayout row = new LinearLayout(this);
+            String[] names = {"Biblioteca", "Apps", "Progresso", "Central de controle", "Folio Transfer"};
+            for (int i = 0; i < names.length; i++) {
+                final int k = i;
+                TextView chip = sheetChip(names[i], false, v -> {
+                    if (k == 0) setTab(1);
+                    else if (k == 1) setTab(2);
+                    else if (k == 2) setTab(4);
+                    else if (k == 3) openControl();
+                    else startTransfer();
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(44));
+                lp.setMargins(0, 0, px(8), 0);
+                row.addView(chip, lp);
+            }
+            hs.addView(row);
+            homeBox.addView(hs, stack(8));
+        }
+    }
+
+    private void customizeHome() {
+        final ReadingChrome.Pal p = appPal();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(px(20), px(16), px(20), px(24));
+        box.addView(ReadingChrome.text(this, "Personalizar Início", 18, p.text, true));
+        final String[] keys = {"clock", "shortcuts", "goal", "recent"};
+        final String[] names = {"Relógio e data", "Atalhos", "Meta de hoje", "Abertos recentemente"};
+        for (int i = 0; i < keys.length; i++) {
+            final String key = keys[i];
+            LinearLayout r = new LinearLayout(this);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setPadding(0, px(8), 0, px(8));
+            r.addView(ReadingChrome.text(this, names[i], 16, p.text, false), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            final TextView sw = sheetChip(homePref(key) ? "Visível" : "Oculto", homePref(key), null);
+            sw.setOnClickListener(v -> {
+                boolean now = !homePref(key);
+                getSharedPreferences("folio", MODE_PRIVATE).edit().putBoolean("home_" + key, now).apply();
+                sw.setText(now ? "Visível" : "Oculto");
+                sw.setTextColor(now ? p.bg : p.text);
+                sw.setTypeface(Typeface.SERIF, now ? Typeface.BOLD : Typeface.NORMAL);
+                sw.setBackground(pressable(now ? p.accent : p.surface, 12, true));
+                refreshHome();
+            });
+            r.addView(sw, new LinearLayout.LayoutParams(px(104), px(44)));
+            box.addView(r);
+        }
+        PaperMotion.sheetIn(ReadingChrome.sheet(this, p, box, null));
+    }
+
     private void refreshHome() {
         homeBox.removeAllViews();
+        homeHeader();
         Book last = lastId == null ? null : byId.get(lastId);
         if (all.isEmpty()) {
             LinearLayout c = card();
@@ -1147,6 +1249,7 @@ public class MainActivity extends Activity {
             homeBox.addView(c, stack(8));
         }
 
+        if (homePref("goal")) {
         final LinearLayout goal = card();
         goal.addView(text("Meta de hoje", 15, Theme.text, true));
         final TextView gt = text("", 13, Theme.secondary, false);
@@ -1164,13 +1267,14 @@ public class MainActivity extends Activity {
                 gb.set(today / (goalMin * 60f));
             });
         });
+        }
 
         io.execute(() -> {
             final List<String> ids = Db.get(this).recent(8);
             ui.post(() -> {
                 List<Book> rec = new ArrayList<>();
                 for (String id : ids) if (byId.get(id) != null && !id.equals(lastId)) rec.add(byId.get(id));
-                if (rec.isEmpty() || tab != 0) return;
+                if (rec.isEmpty() || tab != 0 || !homePref("recent")) return;
                 TextView h = text("Abertos recentemente", 15, Theme.text, true);
                 homeBox.addView(h, stack(24));
                 HorizontalScrollView hs = new HorizontalScrollView(this);
@@ -1333,6 +1437,8 @@ public class MainActivity extends Activity {
 
     private void refreshSettings() {
         setBox.removeAllViews();
+        settingRow("Central de controle", "Wi-Fi, Bluetooth, brilho, volume e mais", v -> openControl());
+        settingRow("Personalizar Início", "Escolha o que aparece na tela inicial", v -> customizeHome());
         settingRow("Tema", Theme.NAMES[Theme.index], v -> chooseTheme());
         settingRow("Perfil de desempenho", PROFILES[profile], v -> chooseProfile());
         settingRow("Movimento", PaperMotion.NAMES[PaperMotion.mode()], v -> chooseMotion());
