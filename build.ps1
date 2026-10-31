@@ -7,6 +7,13 @@ $out = Join-Path $PSScriptRoot 'build'
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory "$out\classes" | Out-Null
 
+# Kiosk exit PIN lives in pin.txt (git-ignored); a random 6-digit one is created on first build.
+$pinFile = Join-Path $PSScriptRoot 'pin.txt'
+if (-not (Test-Path $pinFile)) { Set-Content $pinFile ('{0:D6}' -f (Get-Random -Minimum 0 -Maximum 1000000)) }
+$pin = (Get-Content $pinFile -Raw).Trim()
+New-Item -ItemType Directory -Force "$PSScriptRoot\res\values" | Out-Null
+Set-Content "$PSScriptRoot\res\values\kiosk_pin.xml" "<resources><string name=`"kiosk_pin`">$pin</string></resources>"
+
 & "$bt\aapt2.exe" compile --dir "$PSScriptRoot\res" -o "$out\res.zip"
 if ($LASTEXITCODE) { throw 'aapt2 compile falhou' }
 

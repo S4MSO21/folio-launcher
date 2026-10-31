@@ -16,8 +16,10 @@ import android.widget.Toast;
 
 /** Kindle-style lock: immersive screen, screen pinning, hidden exit gesture. */
 final class Kiosk {
-    // Prototype PIN for the hidden exit. Change before real use.
-    private static final String PIN = "2580";
+    /** Hidden-exit PIN, generated at build time from the git-ignored pin.txt. */
+    private static String pin(Context c) {
+        return c.getString(c.getResources().getIdentifier("kiosk_pin", "string", c.getPackageName()));
+    }
     private static final long EXIT_GRACE_MS = 5 * 60 * 1000;
     private static long suppressUntil;
 
@@ -89,7 +91,7 @@ final class Kiosk {
                 .setView(input)
                 .setNegativeButton("Cancelar", null)
                 .setNeutralButton("Desativar quiosque", (d, w) -> {
-                    if (PIN.equals(input.getText().toString())) {
+                    if (pin(a).equals(input.getText().toString())) {
                         releaseOwner(a);
                         Toast.makeText(a, "Quiosque desativado", Toast.LENGTH_LONG).show();
                     } else {
@@ -97,7 +99,7 @@ final class Kiosk {
                     }
                 })
                 .setPositiveButton("Configurações", (d, w) -> {
-                    if (PIN.equals(input.getText().toString())) {
+                    if (pin(a).equals(input.getText().toString())) {
                         suppressUntil = System.currentTimeMillis() + EXIT_GRACE_MS;
                         lockDown(a, false);
                         try {

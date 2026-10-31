@@ -6,3 +6,5 @@ debug.keystore
 *.log
 hs_err_pid*
 replay_pid*
+pin.txt
+res/values/kiosk_pin.xml
