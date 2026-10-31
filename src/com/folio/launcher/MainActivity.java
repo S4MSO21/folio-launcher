@@ -200,6 +200,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         if (server != null) server.stop();
+        if (apps != null) apps.destroy();
     }
 
     @Override
@@ -608,7 +609,7 @@ public class MainActivity extends Activity {
 
     private void saveGoal(int minutes) {
         getSharedPreferences("folio", MODE_PRIVATE).edit().putInt("goal", minutes).apply();
-        if (tab == 2) refreshProgress();
+        if (tab == 4) refreshProgress();
         else if (tab == 3) refreshSettings();
         else if (tab == 0) refreshHome();
     }
@@ -758,10 +759,11 @@ public class MainActivity extends Activity {
     }
 
     // ---------- UI shell: header, four pages, bottom navigation ----------
-    private final View[] page = new View[4];
+    private final View[] page = new View[5];
+    private FolioApps apps;
     private final LinearLayout[] navItem = new LinearLayout[4];
-    private static final String[] NAV_LABELS = {"Início", "Biblioteca", "Progresso", "Ajustes"};
-    private static final String[] NAV_ICONS = {"ic_home", "ic_library", "ic_chart", "ic_settings"};
+    private static final String[] NAV_LABELS = {"Início", "Biblioteca", "Apps", "Ajustes"};
+    private static final String[] NAV_ICONS = {"ic_home", "ic_library", "ic_apps", "ic_settings"};
     private LinearLayout homeBox, progBox, setBox;
     private EditText search;
     private ImageView viewBtn;
@@ -858,7 +860,9 @@ public class MainActivity extends Activity {
         FrameLayout pages = new FrameLayout(this);
         page[0] = scroll(homeBox = new LinearLayout(this));
         page[1] = buildLibrary();
-        page[2] = scroll(progBox = new LinearLayout(this));
+        apps = new FolioApps(this, profile == 0 ? 32 : profile == 1 ? 64 : 128);
+        page[2] = apps.view();
+        page[4] = scroll(progBox = new LinearLayout(this));
         page[3] = scroll(setBox = new LinearLayout(this));
         for (View p : page) pages.addView(p, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -908,9 +912,11 @@ public class MainActivity extends Activity {
 
     private void setTab(int t) {
         tab = t;
+        for (int i = 0; i < page.length; i++) page[i].setVisibility(i == t ? View.VISIBLE : View.GONE);
+        if (t == 2) apps.onShow();
+        else apps.onHide();
         for (int i = 0; i < 4; i++) {
-            page[i].setVisibility(i == t ? View.VISIBLE : View.GONE);
-            boolean on = i == t;
+            boolean on = i == (t == 4 ? 0 : t); // Progresso is a sub-page of Início
             ImageView im = (ImageView) navItem[i].getChildAt(0);
             im.setImageDrawable(ic(NAV_ICONS[i], on ? Theme.accent : Theme.secondary));
             TextView tv = (TextView) navItem[i].getChildAt(1);
@@ -918,7 +924,7 @@ public class MainActivity extends Activity {
             tv.setTypeface(Typeface.SERIF, on ? Typeface.BOLD : Typeface.NORMAL);
         }
         if (t == 0) refreshHome();
-        else if (t == 2) refreshProgress();
+        else if (t == 4) refreshProgress();
         else if (t == 3) refreshSettings();
     }
 
@@ -1102,7 +1108,7 @@ public class MainActivity extends Activity {
         goal.addView(gt);
         final Widgets.Bar gb = new Widgets.Bar(this);
         goal.addView(gb, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(8)));
-        goal.setOnClickListener(v -> setTab(2));
+        goal.setOnClickListener(v -> setTab(4));
         homeBox.addView(goal, stack(16));
         io.execute(() -> {
             long today = Db.get(this).secondsSince(dayStart(System.currentTimeMillis()));
@@ -1200,7 +1206,7 @@ public class MainActivity extends Activity {
             final int nBooks = all.size(), nDone = db.finishedCount();
             final List<String[]> rec = db.recentSessions(6);
             ui.post(() -> {
-                if (tab != 2) return;
+                if (tab != 4) return;
                 progBox.removeAllViews();
                 LinearLayout r1 = new LinearLayout(this);
                 statCard(r1, "Livros", String.valueOf(nBooks));
