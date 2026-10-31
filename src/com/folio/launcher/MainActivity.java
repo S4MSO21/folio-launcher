@@ -208,6 +208,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         Kiosk.apply(this);
+        ensureStorage();
         applyBrightness();
         long now = android.os.SystemClock.elapsedRealtime();
         if (profile > 0 || now - lastScan > 30000 || all.isEmpty()) scan();
@@ -215,6 +216,23 @@ public class MainActivity extends Activity {
     }
 
     private long lastScan;
+
+    private boolean askedStorage;
+
+    /** Since targetSdk 23 the storage permission is a runtime grant; ask once per launch and rescan when answered. */
+    private void ensureStorage() {
+        if (android.os.Build.VERSION.SDK_INT < 23 || askedStorage) return;
+        if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        askedStorage = true;
+        requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, 41);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(req, perms, res);
+        if (req == 41) scan();
+    }
+
 
     private void globalSearch() {
         new FolioSearch(this, new FolioSearch.Host() {

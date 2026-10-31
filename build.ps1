@@ -22,7 +22,7 @@ $num = 1 + $(if (Test-Path $numFile) { [int](Get-Content $numFile) } else { 1 })
 Set-Content $numFile $num
 
 & "$bt\aapt2.exe" link -o "$out\base.apk" -I $jar --manifest "$PSScriptRoot\AndroidManifest.xml" "$out\res.zip" `
-    --min-sdk-version 25 --target-sdk-version 22 --version-code $num --version-name 0.2
+    --min-sdk-version 25 --target-sdk-version 23 --version-code $num --version-name 0.2
 if ($LASTEXITCODE) { throw 'aapt2 falhou' }
 
 $src = Get-ChildItem "$PSScriptRoot\src" -Recurse -Filter *.java | ForEach-Object FullName
