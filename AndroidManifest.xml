@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- Folio OS only (granted to priv-apps): marks the device as set up so no vendor wizard is needed -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
     <!-- Android 11+ package visibility: the Apps tab lists launchable apps and opens Settings screens -->
     <queries>
