@@ -64,6 +64,69 @@ final class Widgets {
         }
     }
 
+    /** Circular daily-goal ring with the percentage in the middle; a check mark once the goal is met. */
+    static final class Ring extends View {
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF r = new RectF();
+        private float value, target = -1f;
+        private android.animation.ValueAnimator anim;
+
+        Ring(Context c) {
+            super(c);
+        }
+
+        void set(float v) {
+            v = Math.max(0f, Math.min(1f, v));
+            if (v == target) return;
+            boolean first = target < 0f;
+            target = v;
+            if (anim != null) anim.cancel();
+            if (first && !PaperMotion.enabled() || !PaperMotion.enabled() || !isShown()) {
+                value = v;
+                invalidate();
+                return;
+            }
+            anim = android.animation.ValueAnimator.ofFloat(first ? 0f : value, v);
+            anim.setDuration(PaperMotion.duration() * 2L);
+            anim.addUpdateListener(a -> {
+                value = (float) a.getAnimatedValue();
+                invalidate();
+            });
+            anim.start();
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            if (anim != null) anim.cancel();
+            super.onDetachedFromWindow();
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            float d = getResources().getDisplayMetrics().density;
+            float s = Math.min(getWidth(), getHeight()), sw = 8 * d, in = sw / 2f;
+            float ox = (getWidth() - s) / 2f, oy = (getHeight() - s) / 2f;
+            r.set(ox + in, oy + in, ox + s - in, oy + s - in);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(sw);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setColor(Theme.border);
+            c.drawArc(r, 0, 360, false, p);
+            if (value > 0f) {
+                p.setColor(Theme.accent);
+                c.drawArc(r, -90, Math.max(2f, 360f * value), false, p);
+            }
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Theme.text);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setFakeBoldText(true);
+            p.setTextSize(15 * d);
+            String t = target >= 1f ? "✓" : Math.round(value * 100) + "%";
+            c.drawText(t, getWidth() / 2f, getHeight() / 2f + 5.5f * d, p);
+            p.setFakeBoldText(false);
+        }
+    }
+
     /** Seven-day bar chart. Days without reading show a thin baseline mark instead of a blank gap. */
     static final class Chart extends View {
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);

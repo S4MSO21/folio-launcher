@@ -210,12 +210,31 @@ public class MainActivity extends Activity {
         Kiosk.apply(this);
         ensureStorage();
         applyBrightness();
+        if (autoNight()) return;
         long now = android.os.SystemClock.elapsedRealtime();
         if (profile > 0 || now - lastScan > 30000 || all.isEmpty()) scan();
         lastScan = now;
     }
 
     private long lastScan;
+
+    /**
+     * Automatic night theme: Ink Dark from 19:00 to 05:59, the chosen day theme otherwise. Acts only when the
+     * period changes, so a manual choice sticks until the next sunset/sunrise. Returns true when it recreated.
+     */
+    private boolean autoNight() {
+        android.content.SharedPreferences sp = getSharedPreferences("folio", MODE_PRIVATE);
+        if (!sp.getBoolean("auto_night", false)) return false;
+        int h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        boolean night = h >= 19 || h < 6;
+        if (sp.getInt("auto_period", -1) == (night ? 1 : 0)) return false;
+        sp.edit().putInt("auto_period", night ? 1 : 0).apply();
+        int want = night ? 1 : sp.getInt("day_theme", 0);
+        if (want == Theme.index) return false;
+        Theme.set(this, want);
+        recreate();
+        return true;
+    }
 
     private boolean askedStorage;
 
@@ -1244,6 +1263,12 @@ public class MainActivity extends Activity {
             String ds = new java.text.SimpleDateFormat("EEEE, d 'de' MMMM", new Locale("pt", "BR")).format(new java.util.Date());
             TextView date = text(Character.toUpperCase(ds.charAt(0)) + ds.substring(1), 14, Theme.secondary, false);
             c.addView(date);
+            int hr = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            String hi = hr < 5 ? "Boa madrugada" : hr < 12 ? "Bom dia" : hr < 18 ? "Boa tarde" : "Boa noite";
+            Book lb = lastId == null ? null : byId.get(lastId);
+            TextView greet = text(lb == null ? hi + "." : hi + ". Continue de onde parou.", 15, Theme.text, true);
+            greet.setPadding(0, px(8), 0, 0);
+            c.addView(greet);
             homeBox.addView(c, stack(8));
         }
         if (homePref("shortcuts")) {
@@ -1299,7 +1324,10 @@ public class MainActivity extends Activity {
         PaperMotion.sheetIn(ReadingChrome.sheet(this, p, box, null));
     }
 
+    private int homeGen;
+
     private void refreshHome() {
+        final int gen = ++homeGen;
         homeBox.removeAllViews();
         homeHeader();
         Book last = lastId == null ? null : byId.get(lastId);
@@ -1342,19 +1370,26 @@ public class MainActivity extends Activity {
 
         if (homePref("goal")) {
         final LinearLayout goal = card();
-        goal.addView(text("Meta de hoje", 15, Theme.text, true));
+        goal.setOrientation(LinearLayout.HORIZONTAL);
+        goal.setGravity(Gravity.CENTER_VERTICAL);
+        final Widgets.Ring gb = new Widgets.Ring(this);
+        goal.addView(gb, new LinearLayout.LayoutParams(px(76), px(76)));
+        LinearLayout gcol = new LinearLayout(this);
+        gcol.setOrientation(LinearLayout.VERTICAL);
+        gcol.setPadding(px(16), 0, 0, 0);
+        gcol.addView(text("Meta de hoje", 15, Theme.text, true));
         final TextView gt = text("", 13, Theme.secondary, false);
-        gt.setPadding(0, px(4), 0, px(8));
-        goal.addView(gt);
-        final Widgets.Bar gb = new Widgets.Bar(this);
-        goal.addView(gb, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(8)));
+        gt.setPadding(0, px(4), 0, 0);
+        gcol.addView(gt);
+        goal.addView(gcol, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         goal.setOnClickListener(v -> setTab(4));
         homeBox.addView(goal, stack(16));
         io.execute(() -> {
             long today = Db.get(this).secondsSince(dayStart(System.currentTimeMillis()));
             int goalMin = getSharedPreferences("folio", MODE_PRIVATE).getInt("goal", 20);
             ui.post(() -> {
-                gt.setText(dur(today) + " de " + goalMin + " min");
+                gt.setText(today >= goalMin * 60L ? "Meta cumprida! " + dur(today) + " de " + goalMin + " min"
+                        : dur(today) + " de " + goalMin + " min");
                 gb.set(today / (goalMin * 60f));
             });
         });
@@ -1365,7 +1400,7 @@ public class MainActivity extends Activity {
             ui.post(() -> {
                 List<Book> rec = new ArrayList<>();
                 for (String id : ids) if (byId.get(id) != null && !id.equals(lastId)) rec.add(byId.get(id));
-                if (rec.isEmpty() || tab != 0 || !homePref("recent")) return;
+                if (gen != homeGen || rec.isEmpty() || tab != 0 || !homePref("recent")) return;
                 TextView h = text("Abertos recentemente", 15, Theme.text, true);
                 homeBox.addView(h, stack(24));
                 HorizontalScrollView hs = new HorizontalScrollView(this);
@@ -1532,6 +1567,16 @@ public class MainActivity extends Activity {
         settingRow("Personalizar Início", "Escolha o que aparece na tela inicial", v -> customizeHome());
         settingRow("Atualizações do Folio", "Verificar versão, instalar APK", v -> new FolioUpdate(this).show());
         settingRow("Tema", Theme.NAMES[Theme.index], v -> chooseTheme());
+        settingRow("Modo noite automático", getSharedPreferences("folio", MODE_PRIVATE).getBoolean("auto_night", false)
+                ? "Ligado: tema escuro das 19h às 6h" : "Desligado", v -> {
+            android.content.SharedPreferences sp = getSharedPreferences("folio", MODE_PRIVATE);
+            boolean on = !sp.getBoolean("auto_night", false);
+            android.content.SharedPreferences.Editor ed = sp.edit().putBoolean("auto_night", on).putInt("auto_period", -1);
+            if (on && Theme.index != 1) ed.putInt("day_theme", Theme.index);
+            ed.apply();
+            if (on && autoNight()) return;
+            refreshSettings();
+        });
         settingRow("Tela de bloqueio", lockLabel(), v -> chooseLock());
         settingRow("Perfil de desempenho", PROFILES[profile], v -> chooseProfile());
         settingRow("Movimento", PaperMotion.NAMES[PaperMotion.mode()], v -> chooseMotion());
@@ -1551,6 +1596,7 @@ public class MainActivity extends Activity {
         choiceSheet("Tema", Theme.NAMES,
                 new String[]{"Papel creme, texto grafite", "Grafite escuro, texto claro", "Preto e branco, contraste alto, sem transparência"},
                 Theme.index, which -> {
+                    if (which != 1) getSharedPreferences("folio", MODE_PRIVATE).edit().putInt("day_theme", which).apply();
                     Theme.set(this, which);
                     recreate();
                 });
