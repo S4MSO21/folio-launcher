@@ -20,7 +20,7 @@ final class Kiosk {
     private static String pin(Context c) {
         return c.getString(c.getResources().getIdentifier("kiosk_pin", "string", c.getPackageName()));
     }
-    private static final long EXIT_GRACE_MS = 5 * 60 * 1000;
+    private static final long EXIT_GRACE_MS = 20 * 60 * 1000;
     private static long suppressUntil;
 
     static void apply(Activity a) {

@@ -475,10 +475,14 @@ public class MainActivity extends Activity {
         io.execute(() -> {
             Db db = Db.get(this);
             File ext = Environment.getExternalStorageDirectory();
-            File imp = Importer.dir(this);
+            final File imp = Importer.dir(this);
+            final File legacy = Importer.legacyDir(this);
             List<File> dirs = new ArrayList<>();
             for (String dir : FOLDERS) dirs.add(new File(ext, dir));
+            File sd = Importer.sdRoot(this);
+            if (sd != null) for (String dir : FOLDERS) dirs.add(new File(sd, dir));
             dirs.add(imp);
+            if (!legacy.equals(imp)) dirs.add(legacy);
             List<Book> found = new ArrayList<>();
             for (File dir : dirs) {
                 File[] fs = dir.listFiles((x, n) -> Book.supported(n));
@@ -490,7 +494,7 @@ public class MainActivity extends Activity {
                         try {
                             e = Book.open(f);
                             parsed.put(key, e);
-                            db.upsert(e, key, dir.equals(imp), null);
+                            db.upsert(e, key, dir.equals(imp) || dir.equals(legacy), null);
                         } catch (Exception ignored) {
                             continue;
                         }

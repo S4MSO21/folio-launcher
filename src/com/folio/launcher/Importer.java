@@ -3,6 +3,7 @@ package com.folio.launcher;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Environment;
 import android.provider.OpenableColumns;
 
 import java.io.File;
@@ -18,11 +19,37 @@ final class Importer {
     private Importer() {
     }
 
-    static File dir(Context c) {
+    /** Folio's app folder on the primary storage (where books were imported before the SD card was preferred). */
+    static File legacyDir(Context c) {
         File d = c.getExternalFilesDir("books");
         if (d == null) d = new File(c.getFilesDir(), "books");
         d.mkdirs();
         return d;
+    }
+
+    /** Root of the removable SD card (e.g. /storage/ABCD-1234), or null when none is mounted. */
+    static File sdRoot(Context c) {
+        File[] ds = c.getExternalFilesDirs(null);
+        for (int i = 1; ds != null && i < ds.length; i++) {
+            File f = ds[i];
+            if (f == null || !Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState(f))) continue;
+            String p = f.getAbsolutePath();
+            int k = p.indexOf("/Android/data/");
+            if (k > 0) return new File(p.substring(0, k));
+        }
+        return null;
+    }
+
+    /** Where new books go: the SD card whenever it is there, otherwise the primary storage. */
+    static File dir(Context c) {
+        File[] ds = c.getExternalFilesDirs("books");
+        for (int i = 1; ds != null && i < ds.length; i++) {
+            File f = ds[i];
+            if (f == null || !Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState(f))) continue;
+            f.mkdirs();
+            if (f.isDirectory()) return f;
+        }
+        return legacyDir(c);
     }
 
     /** Returns null on success, or a short message in Portuguese describing why the file was skipped. */
