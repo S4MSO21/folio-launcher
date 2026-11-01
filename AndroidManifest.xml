@@ -20,6 +20,7 @@
     </queries>
 
     <application
+        android:name=".FolioApp"
         android:label="Folio"
         android:allowBackup="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
@@ -64,6 +65,14 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".LockActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:stateNotNeeded="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity
             android:name=".PdfActivity"

@@ -57,7 +57,9 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
     private SharedPreferences prefs;
     private FrameLayout root;
     private RWebView web;
-    private TextView loading, indicator;
+    private TextView indicator;
+    private LoadingView loading;
+    private PaperMotion.Leaf pendingLeaf;
     private ReadingChrome chrome;
     private ReadingChrome.Pal pal;
     private Book epub;
@@ -122,6 +124,12 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
                     }
                     ready = true;
                     refreshChrome();
+                    if (loading != null) loading.dismiss();
+                    if (pendingLeaf != null) {
+                        PaperMotion.Leaf l = pendingLeaf;
+                        pendingLeaf = null;
+                        l.release();
+                    }
                 }, 300);
             }
         });
@@ -154,10 +162,9 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
         });
         root.addView(web);
 
-        loading = ReadingChrome.text(this, "Abrindo…", 18, pal.sec, false);
-        loading.setGravity(Gravity.CENTER);
-        root.addView(loading, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        String fileName = f.getName();
+        int dot = fileName.lastIndexOf('.');
+        loading = LoadingView.show(root, dot > 0 ? fileName.substring(0, dot) : fileName);
 
         indicator = ReadingChrome.text(this, "", 11, pal.sec, false);
         indicator.setGravity(Gravity.CENTER);
@@ -179,7 +186,7 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
                 e.prepare(dest);
                 ui.post(() -> start(e, dest));
             } catch (Exception ex) {
-                ui.post(() -> loading.setText("Não foi possível abrir este livro."));
+                ui.post(() -> loading.fail("Não foi possível abrir este livro."));
             }
         }).start();
     }
@@ -196,7 +203,6 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
         root.addView(chrome.top);
         root.addView(chrome.bottom);
         indicator.setTextColor(pal.sec);
-        loading.setTextColor(pal.sec);
         chromeOn = !wasOn; // force setChrome to apply
         setChrome(wasOn);
     }
@@ -210,7 +216,6 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
         if (fr >= 0) pendingFrac = fr;
         else pendingY = saved == null ? 0 : saved[1];
         marks = Db.get(this).bookmarks(id);
-        loading.setVisibility(View.GONE);
         buildChrome(e.title);
         if (e.kind == Book.Kind.CBZ) web.setBackgroundColor(0xFF000000);
         show(chapter);
@@ -229,24 +234,36 @@ public class ReaderActivity extends Activity implements ReadingChrome.Callbacks 
     private void next() {
         if (epub == null) return;
         setChrome(false);
+        if (pendingLeaf != null) pendingLeaf.discard();
+        pendingLeaf = null;
+        PaperMotion.Leaf lf = PaperMotion.lift(root, web, 1);
         if (web.pageDown(false)) {
-            PaperMotion.slide(web, 1);
+            if (lf != null) web.post(lf::release);
         } else if (chapter + 1 < epub.spine.size()) {
             pendingFrac = -1;
             pendingY = 0;
+            pendingLeaf = lf;
             show(chapter + 1);
+        } else if (lf != null) {
+            lf.discard();
         }
     }
 
     private void prev() {
         if (epub == null) return;
         setChrome(false);
+        if (pendingLeaf != null) pendingLeaf.discard();
+        pendingLeaf = null;
+        PaperMotion.Leaf lf = PaperMotion.lift(root, web, -1);
         if (web.pageUp(false)) {
-            PaperMotion.slide(web, -1);
+            if (lf != null) web.post(lf::release);
         } else if (chapter > 0) {
             pendingFrac = 1;
             pendingIsProgress = true;
+            pendingLeaf = lf;
             show(chapter - 1);
+        } else if (lf != null) {
+            lf.discard();
         }
     }
 

@@ -85,6 +85,73 @@ final class PaperMotion {
                 .setInterpolator(DECEL).start();
     }
 
+    /**
+     * A page leaf: a snapshot of the page being left, laid over the content, that slides away with a soft
+     * shadow on its trailing edge while the new page appears underneath. dir 1 = forward (leaf leaves to the
+     * left), -1 = back (leaf leaves to the right). One 2 MB bitmap, released as soon as the turn ends.
+     */
+    static final class Leaf {
+        private final android.widget.FrameLayout host, holder;
+        private final android.graphics.Bitmap bmp;
+        private final int dir, shadow;
+        private boolean done;
+
+        Leaf(android.widget.FrameLayout host, android.widget.FrameLayout holder, android.graphics.Bitmap bmp, int dir, int shadow) {
+            this.host = host;
+            this.holder = holder;
+            this.bmp = bmp;
+            this.dir = dir;
+            this.shadow = shadow;
+        }
+
+        /** Starts the turn; call once the new page is already drawn underneath. */
+        void release() {
+            if (done) return;
+            float dist = (host.getWidth() + shadow) * -dir;
+            holder.animate().translationX(dist).setDuration(mode == PREMIUM ? 280 : 210)
+                    .setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator())
+                    .withEndAction(this::discard).start();
+        }
+
+        void discard() {
+            if (done) return;
+            done = true;
+            holder.animate().cancel();
+            host.removeView(holder);
+            bmp.recycle();
+        }
+    }
+
+    /** Captures {@code content} as a leaf over {@code host}; returns null when page turns are off. */
+    static Leaf lift(android.widget.FrameLayout host, View content, int dir) {
+        if (!enabled() || !slidePages(host.getContext()) || content.getWidth() <= 0 || content.getHeight() <= 0) return null;
+        try {
+            int w = content.getWidth(), h = content.getHeight();
+            android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.RGB_565);
+            android.graphics.Canvas cv = new android.graphics.Canvas(bmp);
+            cv.drawColor(Theme.bg);
+            content.draw(cv);
+            android.widget.FrameLayout holder = new android.widget.FrameLayout(host.getContext());
+            android.widget.ImageView img = new android.widget.ImageView(host.getContext());
+            img.setImageBitmap(bmp);
+            holder.addView(img, new android.widget.FrameLayout.LayoutParams(w, h));
+            int sw = Math.round(26 * density);
+            View edge = new View(host.getContext());
+            android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                    dir > 0 ? new int[]{0x55000000, 0x00000000} : new int[]{0x00000000, 0x55000000});
+            edge.setBackground(g);
+            android.widget.FrameLayout.LayoutParams ep = new android.widget.FrameLayout.LayoutParams(sw, h);
+            ep.leftMargin = dir > 0 ? w : -sw;
+            holder.addView(edge, ep);
+            holder.setClipChildren(false);
+            host.addView(holder, new android.widget.FrameLayout.LayoutParams(w, h));
+            return new Leaf(host, holder, bmp, dir, sw);
+        } catch (Throwable t) { // out of memory or a view that cannot be drawn: just skip the effect
+            return null;
+        }
+    }
+
     // ---------- bars and panels ----------
 
     /** Fades a bar in while sliding it from {@code dp} density-independent pixels away. */

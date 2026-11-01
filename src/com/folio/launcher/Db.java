@@ -265,6 +265,14 @@ final class Db extends SQLiteOpenHelper {
         }
     }
 
+    /** Title and author of the book opened most recently, or null when nothing was read yet. */
+    String[] lastBook() {
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT title, author FROM books WHERE last_opened>0"
+                + " ORDER BY last_opened DESC LIMIT 1", null)) {
+            return c.moveToFirst() ? new String[]{c.getString(0), c.getString(1)} : null;
+        }
+    }
+
     /** Drops rows for books whose file is gone (progress and sessions are kept in case the file returns). */
     void prune(java.util.Set<String> present) {
         SQLiteDatabase db = getWritableDatabase();

@@ -46,7 +46,8 @@ public class PdfActivity extends Activity implements ReadingChrome.Callbacks {
             else setChrome(false);
         }
     };
-    private TextView loading;
+    private LoadingView loading;
+    private PaperMotion.Leaf leaf;
     private ParcelFileDescriptor fd;
     private PdfRenderer renderer;
     private Bitmap shown;
@@ -93,10 +94,9 @@ public class PdfActivity extends Activity implements ReadingChrome.Callbacks {
         root.addView(view, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        loading = label("Abrindo…", 18, Theme.secondary);
-        loading.setGravity(Gravity.CENTER);
-        root.addView(loading, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        String fileName = new File(getIntent().getStringExtra("path")).getName();
+        int dot = fileName.lastIndexOf('.');
+        loading = LoadingView.show(root, dot > 0 ? fileName.substring(0, dot) : fileName);
 
         buildChrome();
         setContentView(root);
@@ -117,12 +117,11 @@ public class PdfActivity extends Activity implements ReadingChrome.Callbacks {
                 int[] saved = Db.get(this).progress(id);
                 page = Math.max(0, Math.min(saved == null ? 0 : saved[0], count - 1));
                 ui.post(() -> {
-                    loading.setVisibility(View.GONE);
                     buildChrome();
                     render();
                 });
             } catch (Exception e) {
-                ui.post(() -> loading.setText("Não foi possível abrir este PDF."));
+                ui.post(() -> loading.fail("Não foi possível abrir este PDF."));
             }
         });
     }
@@ -133,6 +132,8 @@ public class PdfActivity extends Activity implements ReadingChrome.Callbacks {
         int p = page + delta;
         if (p < 0 || p >= count) return;
         page = p;
+        if (leaf != null) leaf.discard();
+        leaf = PaperMotion.lift(root, view, delta);
         render();
     }
 
@@ -160,6 +161,12 @@ public class PdfActivity extends Activity implements ReadingChrome.Callbacks {
                     shown = bm;
                     view.setImageBitmap(bm);
                     if (old != null) old.recycle();
+                    loading.dismiss();
+                    if (leaf != null) {
+                        final PaperMotion.Leaf l = leaf;
+                        leaf = null;
+                        view.post(l::release);
+                    }
                 });
             } catch (Exception ignored) {
             }

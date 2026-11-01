@@ -741,6 +741,48 @@ public class MainActivity extends Activity {
         else if (tab == 0) refreshHome();
     }
 
+    private String lockLabel() {
+        int m = LockActivity.mode(this);
+        return m == LockActivity.OFF ? "Desligada" : m == LockActivity.PIN ? "Deslizar e PIN" : "Deslizar para abrir";
+    }
+
+    private void chooseLock() {
+        final String[] items = {"Desligada", "Deslizar para abrir", "Deslizar e PIN"};
+        new android.app.AlertDialog.Builder(this, Theme.dialog())
+                .setTitle("Tela de bloqueio")
+                .setSingleChoiceItems(items, LockActivity.mode(this), (d, which) -> {
+                    d.dismiss();
+                    if (which == LockActivity.PIN) {
+                        askLockPin();
+                    } else {
+                        LockActivity.setMode(this, which);
+                        refreshSettings();
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private void askLockPin() {
+        final android.widget.EditText in = new android.widget.EditText(this);
+        in.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        in.setHint("4 a 6 dígitos");
+        new android.app.AlertDialog.Builder(this, Theme.dialog())
+                .setTitle("PIN da tela de bloqueio")
+                .setView(in)
+                .setPositiveButton("Salvar", (d, w) -> {
+                    String pin = in.getText().toString();
+                    if (pin.length() < 4 || pin.length() > 6) {
+                        android.widget.Toast.makeText(this, "Use de 4 a 6 dígitos", android.widget.Toast.LENGTH_SHORT).show();
+                    } else {
+                        LockActivity.setPin(this, pin);
+                    }
+                    refreshSettings();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
     private void chooseGoal() {
         final ReadingChrome.Pal p = appPal();
         final int cur = getSharedPreferences("folio", MODE_PRIVATE).getInt("goal", 20);
@@ -1490,6 +1532,7 @@ public class MainActivity extends Activity {
         settingRow("Personalizar Início", "Escolha o que aparece na tela inicial", v -> customizeHome());
         settingRow("Atualizações do Folio", "Verificar versão, instalar APK", v -> new FolioUpdate(this).show());
         settingRow("Tema", Theme.NAMES[Theme.index], v -> chooseTheme());
+        settingRow("Tela de bloqueio", lockLabel(), v -> chooseLock());
         settingRow("Perfil de desempenho", PROFILES[profile], v -> chooseProfile());
         settingRow("Movimento", PaperMotion.NAMES[PaperMotion.mode()], v -> chooseMotion());
         settingRow("Meta diária de leitura", getSharedPreferences("folio", MODE_PRIVATE).getInt("goal", 20) + " minutos", v -> chooseGoal());
