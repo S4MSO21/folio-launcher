@@ -238,6 +238,19 @@ final class ReadingChrome {
         bg.setCornerRadii(new float[]{20 * dd, 20 * dd, 20 * dd, 20 * dd, 0, 0, 0, 0});
         bg.setStroke(Math.max(1, (int) dd), p.border);
         content.setBackground(bg);
+        // frosted glass over the blurred screen; falls back to the solid paper sheet in Eco, Pure Paper or on any error
+        if (PaperMotion.enabled() && Theme.index != 2) {
+            try {
+                View decor = a.getWindow().getDecorView();
+                if (decor.getWidth() > 0 && decor.getHeight() > 0) {
+                    android.graphics.Bitmap snap = Frost.blur(Frost.snapshot(decor, 8), 3, 2);
+                    float r = 20 * dd;
+                    content.setBackground(Frost.glass(snap, decor.getWidth(),
+                            new float[]{r, r, r, r, 0, 0, 0, 0}, p.surface, Math.max(1f, dd)));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
         dlg.setContentView(content);
         Window w = dlg.getWindow();
         w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));

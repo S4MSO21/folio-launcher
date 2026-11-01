@@ -25,6 +25,8 @@ public class LockActivity extends Activity {
     static final int OFF = 0, SWIPE = 1, PIN = 2;
     private static final String PREFS = "folio", K_MODE = "lock_mode", K_PIN = "lock_pin";
 
+    private android.widget.ImageView wallpaper, coverView;
+    private View shade;
     private FrameLayout root;
     private LinearLayout face;
     private LinearLayout pad;
@@ -96,11 +98,51 @@ public class LockActivity extends Activity {
         face.addView(label(Character.toUpperCase(ds.charAt(0)) + ds.substring(1), 18, Theme.secondary, false));
 
         String[] last = Db.get(this).lastBook();
+        wallpaper = new android.widget.ImageView(this);
+        wallpaper.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        wallpaper.setAlpha(0f);
+        root.addView(wallpaper, new FrameLayout.LayoutParams(-1, -1));
+        shade = new View(this);
+        shade.setBackgroundColor(Theme.dark() ? 0x99000000 : 0x66FFFFFF);
+        shade.setAlpha(0f);
+        root.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+
         if (last != null) {
-            face.addView(new View(this), new LinearLayout.LayoutParams(1, px(56)));
-            face.addView(label("Lendo agora", 13, Theme.secondary, false));
-            face.addView(label(last[0], 22, Theme.text, true));
-            if (last[1] != null && !last[1].isEmpty()) face.addView(label(last[1], 15, Theme.secondary, false));
+            face.addView(new View(this), new LinearLayout.LayoutParams(1, px(48)));
+            // glass card: translucent paper over the blurred cover, with a light edge
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(px(16), px(16), px(16), px(16));
+            GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{(Theme.surface & 0xFFFFFF) | 0xA6000000, (Theme.surface & 0xFFFFFF) | 0x80000000});
+            g.setCornerRadius(px(20));
+            g.setStroke(Math.max(1, px(1)), Theme.dark() ? 0x55FFFFFF : 0xB3FFFFFF);
+            card.setBackground(g);
+            coverView = new android.widget.ImageView(this);
+            coverView.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            Theme.clip(coverView, 8);
+            coverView.setVisibility(View.GONE);
+            card.addView(coverView, new LinearLayout.LayoutParams(px(64), px(96)));
+            LinearLayout txt = new LinearLayout(this);
+            txt.setOrientation(LinearLayout.VERTICAL);
+            TextView k = ReadingChrome.text(this, "Lendo agora", 12, Theme.secondary, false);
+            TextView t = ReadingChrome.text(this, last[0], 18, Theme.text, true);
+            t.setMaxLines(3);
+            t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            txt.addView(k);
+            txt.addView(t);
+            if (last[1] != null && !last[1].isEmpty()) {
+                TextView a = ReadingChrome.text(this, last[1], 14, Theme.secondary, false);
+                a.setMaxLines(1);
+                a.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                txt.addView(a);
+            }
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1f);
+            tp.leftMargin = px(14);
+            card.addView(txt, tp);
+            face.addView(card, new LinearLayout.LayoutParams(-1, -2));
+            loadCover(last[2]);
         }
         root.addView(face, new FrameLayout.LayoutParams(-1, -1));
 
@@ -129,6 +171,27 @@ public class LockActivity extends Activity {
             }
         });
         setContentView(root);
+    }
+
+    /** Reads the cover off the UI thread, then fades in a blurred copy as the wallpaper and a sharp one on the card. */
+    private void loadCover(final String path) {
+        new Thread(() -> {
+            try {
+                final android.graphics.Bitmap cv = Book.open(new java.io.File(path)).cover(320);
+                if (cv == null) return;
+                final android.graphics.Bitmap small = Frost.blur(android.graphics.Bitmap.createScaledBitmap(
+                        cv, 36, Math.max(8, 36 * cv.getHeight() / cv.getWidth()), true), 2, 2);
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    coverView.setImageBitmap(cv);
+                    coverView.setVisibility(View.VISIBLE);
+                    wallpaper.setImageBitmap(small);
+                    wallpaper.animate().alpha(1f).setDuration(PaperMotion.enabled() ? 320 : 0).start();
+                    shade.animate().alpha(1f).setDuration(PaperMotion.enabled() ? 320 : 0).start();
+                });
+            } catch (Throwable ignored) {
+            }
+        }, "lock-cover").start();
     }
 
     private TextView label(String s, int sp, int color, boolean bold) {

@@ -267,9 +267,9 @@ final class Db extends SQLiteOpenHelper {
 
     /** Title and author of the book opened most recently, or null when nothing was read yet. */
     String[] lastBook() {
-        try (Cursor c = getReadableDatabase().rawQuery("SELECT title, author FROM books WHERE last_opened>0"
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT title, author, path FROM books WHERE last_opened>0"
                 + " ORDER BY last_opened DESC LIMIT 1", null)) {
-            return c.moveToFirst() ? new String[]{c.getString(0), c.getString(1)} : null;
+            return c.moveToFirst() ? new String[]{c.getString(0), c.getString(1), c.getString(2)} : null;
         }
     }
 
