@@ -471,6 +471,12 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** Same size + same name start = same book; very long names get cut at different lengths on SD vs internal. */
+    private static String dupKey(File f) {
+        String n = f.getName().toLowerCase(java.util.Locale.ROOT);
+        return "n:" + f.length() + ":" + n.substring(0, Math.min(40, n.length()));
+    }
+
     private void scan() {
         io.execute(() -> {
             Db db = Db.get(this);
@@ -478,16 +484,26 @@ public class MainActivity extends Activity {
             final File imp = Importer.dir(this);
             final File legacy = Importer.legacyDir(this);
             List<File> dirs = new ArrayList<>();
-            for (String dir : FOLDERS) dirs.add(new File(ext, dir));
             File sd = Importer.sdRoot(this);
+            // the SD card comes first so its copy wins when the same book exists in two places
             if (sd != null) for (String dir : FOLDERS) dirs.add(new File(sd, dir));
             dirs.add(imp);
             if (!legacy.equals(imp)) dirs.add(legacy);
+            for (String dir : FOLDERS) dirs.add(new File(ext, dir));
             List<Book> found = new ArrayList<>();
+            java.util.Set<String> seen = new java.util.HashSet<>();
             for (File dir : dirs) {
                 File[] fs = dir.listFiles((x, n) -> Book.supported(n));
                 if (fs == null) continue;
                 for (File f : fs) {
+                    String canon;
+                    try {
+                        canon = f.getCanonicalPath();
+                    } catch (java.io.IOException ex) {
+                        canon = f.getAbsolutePath();
+                    }
+                    // same file reached by two paths, or the same book copied into two folders
+                    if (!seen.add(canon) || !seen.add(dupKey(f))) continue;
                     String key = Book.id(f);
                     Book e = parsed.get(key);
                     if (e == null) {

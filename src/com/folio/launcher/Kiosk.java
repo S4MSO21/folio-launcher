@@ -49,11 +49,28 @@ final class Kiosk {
             DevicePolicyManager dpm = (DevicePolicyManager) a.getSystemService(Context.DEVICE_POLICY_SERVICE);
             if (!dpm.isDeviceOwnerApp(a.getPackageName())) return;
             ComponentName admin = new ComponentName(a, AdminReceiver.class);
-            dpm.setLockTaskPackages(admin, new String[]{a.getPackageName()});
+            dpm.setLockTaskPackages(admin, lockTaskPackages(a));
             dpm.setStatusBarDisabled(admin, on);
             dpm.setKeyguardDisabled(admin, on);
         } catch (Exception ignored) {
         }
+    }
+
+    /**
+     * Screen pinning blocks every app that is not whitelisted, so the whitelist is Folio plus every
+     * installed app with a launcher icon and the system screens those apps open (installer, files).
+     */
+    private static String[] lockTaskPackages(Activity a) {
+        java.util.Set<String> pkgs = new java.util.LinkedHashSet<>();
+        pkgs.add(a.getPackageName());
+        Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        for (android.content.pm.ResolveInfo r : a.getPackageManager().queryIntentActivities(main, 0)) {
+            pkgs.add(r.activityInfo.packageName);
+        }
+        pkgs.add("com.android.packageinstaller");
+        pkgs.add("com.android.documentsui");
+        pkgs.add("com.android.settings");
+        return pkgs.toArray(new String[0]);
     }
 
     private static void releaseOwner(Activity a) {
