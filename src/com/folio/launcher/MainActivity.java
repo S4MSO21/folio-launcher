@@ -88,6 +88,73 @@ public class MainActivity extends Activity {
 
         buildUi();
         handleSend(getIntent());
+        android.content.SharedPreferences fp = getSharedPreferences("folio", MODE_PRIVATE);
+        if (!fp.getBoolean("welcomed", false) && !fp.contains("theme") && !fp.contains("goal")) {
+            getWindow().getDecorView().postDelayed(this::welcome, 600);
+        }
+    }
+
+    /** First run on a fresh Folio OS (there is no vendor wizard): theme, Wi-Fi and daily goal in one sheet. */
+    private void welcome() {
+        if (isFinishing()) return;
+        final ReadingChrome.Pal p = appPal();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(px(20), px(20), px(20), px(24));
+        box.addView(ReadingChrome.text(this, "Bem-vindo ao Folio", 22, p.text, true));
+        TextView sub = ReadingChrome.text(this, "Três ajustes rápidos. Você muda tudo depois em Ajustes.", 14, p.sec, false);
+        sub.setPadding(0, px(4), 0, px(16));
+        box.addView(sub);
+        final android.app.Dialog[] dlg = new android.app.Dialog[1];
+
+        box.addView(ReadingChrome.text(this, "Tema", 15, p.text, true));
+        LinearLayout tr = new LinearLayout(this);
+        for (int i = 0; i < Theme.NAMES.length; i++) {
+            final int k = i;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, px(48), 1f);
+            lp.setMargins(0, px(8), i < 2 ? px(8) : 0, px(16));
+            tr.addView(sheetChip(Theme.NAMES[i], Theme.index == i, v -> {
+                if (k != 1) getSharedPreferences("folio", MODE_PRIVATE).edit().putInt("day_theme", k).apply();
+                Theme.set(this, k);
+                recreate();
+            }), lp);
+        }
+        box.addView(tr);
+
+        box.addView(ReadingChrome.text(this, "Meta diária de leitura", 15, p.text, true));
+        LinearLayout gr = new LinearLayout(this);
+        final int cur = getSharedPreferences("folio", MODE_PRIVATE).getInt("goal", 20);
+        final TextView[] chipsG = new TextView[3];
+        final int[] mins = {10, 20, 30};
+        for (int i = 0; i < 3; i++) {
+            final int m = mins[i];
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, px(48), 1f);
+            lp.setMargins(0, px(8), i < 2 ? px(8) : 0, px(16));
+            chipsG[i] = sheetChip(m + " min", m == cur, v -> {
+                getSharedPreferences("folio", MODE_PRIVATE).edit().putInt("goal", m).apply();
+                for (int j = 0; j < 3; j++) {
+                    boolean on = mins[j] == m;
+                    chipsG[j].setTextColor(on ? p.bg : p.text);
+                    chipsG[j].setBackground(pressable(on ? p.accent : p.surface, 12, true));
+                }
+            });
+            gr.addView(chipsG[i], lp);
+        }
+        box.addView(gr);
+
+        box.addView(ReadingChrome.text(this, "Wi-Fi", 15, p.text, true));
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(-1, px(48));
+        wl.setMargins(0, px(8), 0, px(20));
+        box.addView(sheetChip("Conectar a uma rede", false, v -> openControl()), wl);
+
+        TextView go = sheetChip("Começar", true, v -> {
+            getSharedPreferences("folio", MODE_PRIVATE).edit().putBoolean("welcomed", true)
+                    .putInt("goal", getSharedPreferences("folio", MODE_PRIVATE).getInt("goal", 20)).apply();
+            dlg[0].dismiss();
+        });
+        box.addView(go, new LinearLayout.LayoutParams(-1, px(52)));
+        dlg[0] = ReadingChrome.sheet(this, p, box, null);
+        PaperMotion.sheetIn(dlg[0]);
     }
 
     @Override
