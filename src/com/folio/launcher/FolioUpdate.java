@@ -95,16 +95,55 @@ final class FolioUpdate {
         return t;
     }
 
-    /** Hands an APK the user picked to the system installer. */
-    void installFrom(Uri uri) {
-        try {
-            Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-            a.startActivity(i);
-        } catch (Exception e) {
-            Toast.makeText(a, "Não foi possível abrir o instalador do Android.", Toast.LENGTH_LONG).show();
-        }
+    private static final String ACTION_RESULT = "com.folio.launcher.INSTALL_RESULT";
+
+    /**
+     * Installs an APK through a PackageInstaller session (no dependency on an app that resolves the
+     * install intent). Android asks the user to confirm; self-updates restart Folio afterwards.
+     */
+    void installFrom(final Uri uri) {
+        new Thread(() -> {
+            try {
+                android.content.pm.PackageInstaller pi = a.getPackageManager().getPackageInstaller();
+                android.content.pm.PackageInstaller.SessionParams sp =
+                        new android.content.pm.PackageInstaller.SessionParams(android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+                int id = pi.createSession(sp);
+                android.content.pm.PackageInstaller.Session session = pi.openSession(id);
+                try (InputStream in = a.getContentResolver().openInputStream(uri);
+                     java.io.OutputStream os = session.openWrite("folio.apk", 0, -1)) {
+                    if (in == null) throw new java.io.IOException("arquivo ilegível");
+                    byte[] buf = new byte[32 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+                    session.fsync(os);
+                }
+                final android.content.BroadcastReceiver rx = new android.content.BroadcastReceiver() {
+                    @Override
+                    public void onReceive(android.content.Context c, Intent i) {
+                        int st = i.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -1);
+                        if (st == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                            Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
+                            if (confirm != null) a.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                            return;
+                        }
+                        try {
+                            a.unregisterReceiver(this);
+                        } catch (Exception ignored) {
+                        }
+                        if (st != android.content.pm.PackageInstaller.STATUS_SUCCESS) {
+                            String why = i.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
+                            Toast.makeText(a, "Instalação não concluída: " + (why == null ? "código " + st : why), Toast.LENGTH_LONG).show();
+                        }
+                    }
+                };
+                a.registerReceiver(rx, new android.content.IntentFilter(ACTION_RESULT));
+                android.app.PendingIntent pending = android.app.PendingIntent.getBroadcast(a, id,
+                        new Intent(ACTION_RESULT).setPackage(a.getPackageName()), android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+                session.commit(pending.getIntentSender());
+            } catch (final Exception e) {
+                ui.post(() -> Toast.makeText(a, "Não foi possível instalar: " + e, Toast.LENGTH_LONG).show());
+            }
+        }, "folio-install").start();
     }
 
     // ---------- GitHub ----------
